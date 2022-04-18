@@ -9,6 +9,11 @@ from gym.envs import registry as gym_registry
 from gym.spaces import flatdim
 import numpy as np
 from gym.wrappers import TimeLimit as GymTimeLimit
+import pandas as pd
+from pathlib import Path
+import time
+from copy import deepcopy
+
 
 def env_fn(env, **kwargs) -> MultiAgentEnv:
     return env(**kwargs)
@@ -95,10 +100,18 @@ class _GymmaWrapper(MultiAgentEnv):
         self._seed = kwargs["seed"]
         self._env.seed(self._seed)
 
+        self.collected_data_path = Path(f'collected-data/{key}/')
+        self.collected_data_path.mkdir(parents=True, exist_ok=True)
+        self.run_id = 0
+        self.replay_buffer = []
+
     def step(self, actions):
         """ Returns reward, terminated, info """
         actions = [int(a) for a in actions]
+        old_obs = deepcopy(self._obs)
         self._obs, reward, done, info = self._env.step(actions)
+        # save obs, reward, actions here
+        # print('sum reward', sum(reward), 'done', all(done))
         self._obs = [
             np.pad(
                 o,
@@ -107,6 +120,11 @@ class _GymmaWrapper(MultiAgentEnv):
                 constant_values=0,
             )
             for o in self._obs
+        ]
+
+        [
+            self.add_data_to_buffer(i, o, reward[i], actions[i], done[i])
+            for i, o in enumerate(old_obs)
         ]
 
         return float(sum(reward)), all(done), {}
@@ -175,7 +193,23 @@ class _GymmaWrapper(MultiAgentEnv):
             )
             for o in self._obs
         ]
+
+        # custom: for storing data
+        self.run_id += 1
         return self.get_obs(), self.get_state()
+
+    def reset_buffer(self):
+        self.replay_buffer = []
+
+    def add_data_to_buffer(self, agent_id, obs, reward, action, done):
+        self.replay_buffer.append({
+            'run_id': self.run_id,
+            'agent_id': agent_id,
+            'obs': obs,
+            'reward': reward,
+            'action': action,
+            'done': done
+        })
 
     def render(self):
         self._env.render()
@@ -187,7 +221,13 @@ class _GymmaWrapper(MultiAgentEnv):
         return self._env.seed
 
     def save_replay(self):
-        pass
+        if len(self.replay_buffer) > 0:
+            cols = self.replay_buffer[0].keys()
+        else:
+            cols = None
+        file_name = f"{int(time.time())}.csv"
+        save_path = self.collected_data_path.joinpath(file_name)
+        pd.DataFrame(self.replay_buffer, columns=cols).to_csv(save_path)
 
     def get_stats(self):
         return {}
