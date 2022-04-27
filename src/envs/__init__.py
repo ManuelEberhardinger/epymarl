@@ -123,7 +123,7 @@ class _GymmaWrapper(MultiAgentEnv):
         ]
 
         [
-            self.add_data_to_buffer(i, o, reward[i], actions[i], done[i])
+            self.add_data_to_buffer(i, o, reward[i], actions[i], done[i], info[i])
             for i, o in enumerate(old_obs)
         ]
 
@@ -201,14 +201,15 @@ class _GymmaWrapper(MultiAgentEnv):
     def reset_buffer(self):
         self.replay_buffer = []
 
-    def add_data_to_buffer(self, agent_id, obs, reward, action, done):
+    def add_data_to_buffer(self, agent_id, obs, reward, action, done, player_pos):
         self.replay_buffer.append({
             'run_id': self.run_id,
             'agent_id': agent_id,
             'obs': obs,
             'reward': reward,
             'action': action,
-            'done': done
+            'done': done,
+            'player_pos': player_pos
         })
 
     def render(self):
