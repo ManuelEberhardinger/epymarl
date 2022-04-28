@@ -14,6 +14,8 @@ from pathlib import Path
 import time
 from copy import deepcopy
 
+from lbforaging.foraging.environment import ForagingEnv
+
 
 def env_fn(env, **kwargs) -> MultiAgentEnv:
     return env(**kwargs)
@@ -83,6 +85,7 @@ class FlattenObservation(ObservationWrapper):
 class _GymmaWrapper(MultiAgentEnv):
     def __init__(self, key, time_limit, pretrained_wrapper, **kwargs):
         self.episode_limit = time_limit
+
         self._env = TimeLimit(gym.make(f"{key}"), max_episode_steps=time_limit)
         self._env = FlattenObservation(self._env)
 
@@ -91,6 +94,7 @@ class _GymmaWrapper(MultiAgentEnv):
 
         self.n_agents = self._env.n_agents
         self._obs = None
+        self._info = None
 
         self.longest_action_space = max(self._env.action_space, key=lambda x: x.n)
         self.longest_observation_space = max(
@@ -109,7 +113,8 @@ class _GymmaWrapper(MultiAgentEnv):
         """ Returns reward, terminated, info """
         actions = [int(a) for a in actions]
         old_obs = deepcopy(self._obs)
-        self._obs, reward, done, info = self._env.step(actions)
+        old_info = deepcopy(self._info)
+        self._obs, reward, done, self._info = self._env.step(actions)
         # save obs, reward, actions here
         # print('sum reward', sum(reward), 'done', all(done))
         self._obs = [
@@ -123,7 +128,7 @@ class _GymmaWrapper(MultiAgentEnv):
         ]
 
         [
-            self.add_data_to_buffer(i, o, reward[i], actions[i], done[i], info[i])
+            self.add_data_to_buffer(i, o, reward[i], actions[i], done[i], old_info['player_pos'][i])
             for i, o in enumerate(old_obs)
         ]
 
@@ -184,6 +189,7 @@ class _GymmaWrapper(MultiAgentEnv):
     def reset(self):
         """ Returns initial observations and states"""
         self._obs = self._env.reset()
+
         self._obs = [
             np.pad(
                 o,
@@ -196,6 +202,8 @@ class _GymmaWrapper(MultiAgentEnv):
 
         # custom: for storing data
         self.run_id += 1
+        if isinstance(self._env.unwrapped, ForagingEnv):
+            self._info = self._env.get_player_pos_info()
         return self.get_obs(), self.get_state()
 
     def reset_buffer(self):
