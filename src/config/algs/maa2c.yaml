@@ -1,4 +1,4 @@
-# --- Central-V specific parameters ---
+--- # --- Central-V specific parameters ---
 
 action_selector: "soft_policies"
 mask_before_softmax: True
